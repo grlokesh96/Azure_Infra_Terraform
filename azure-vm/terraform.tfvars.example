@@ -1,0 +1,13 @@
+subscription_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+
+location = "East US"
+
+project_name = "platform"
+
+environment = "prod"
+
+admin_username = "azureadmin"
+
+ssh_public_key = "ssh-ed25519 AAAA...your-public-key..."
+
+allowed_ssh_cidr = "YOUR.PUBLIC.IP.ADDRESS/32"
