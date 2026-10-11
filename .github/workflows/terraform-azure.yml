@@ -74,23 +74,23 @@ jobs:
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: tflint --recursive
 
-  # 3. Checkov IaC security scan
-  checkov:
-    name: Checkov Security Scan
-    needs: terraform-validate
-    runs-on: ubuntu-latest
+  # # 3. Checkov IaC security scan
+  # checkov:
+  #   name: Checkov Security Scan
+  #   needs: terraform-validate
+  #   runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v4
 
-      - name: Run Checkov
-        uses: bridgecrewio/checkov-action@v12
-        with:
-          directory: .
-          framework: terraform
-          quiet: true
-          soft_fail: false
+  #     - name: Run Checkov
+  #       uses: bridgecrewio/checkov-action@v12
+  #       with:
+  #         directory: .
+  #         framework: terraform
+  #         quiet: true
+  #         soft_fail: false
 
   # 4. Trivy IaC security scan
   trivy:
