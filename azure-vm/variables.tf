@@ -1,7 +1,6 @@
 variable "subscription_id" {
   description = "Azure subscription ID"
   type        = string
-  sensitive   = true
 }
 
 variable "location" {
@@ -31,7 +30,6 @@ variable "admin_username" {
 variable "ssh_public_key" {
   description = "SSH public key"
   type        = string
-  sensitive   = true
 }
 
 variable "allowed_ssh_cidr" {
