@@ -1,3 +1,4 @@
+
 resource "azurerm_linux_virtual_machine" "vm" {
   name                = "vm-${local.name_prefix}"
   location            = azurerm_resource_group.main.location
@@ -36,10 +37,10 @@ resource "azurerm_linux_virtual_machine" "vm" {
   secure_boot_enabled = true
   vtpm_enabled        = true
 
-  patch_mode = "AutomaticByPlatform"
-
+  patch_mode     = "AutomaticByPlatform"
   reboot_setting = "IfRequired"
 
+  # Keep the Azure VM Agent enabled for platform management.
   provision_vm_agent = true
 
   boot_diagnostics {}
