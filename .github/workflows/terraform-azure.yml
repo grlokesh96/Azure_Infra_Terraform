@@ -4,29 +4,27 @@ on:
   push:
     branches:
       - main
-
   pull_request:
     branches:
       - main
-
   workflow_dispatch:
 
-# Default permissions
 permissions:
   contents: read
 
 env:
   TF_VERSION: "1.9.8"
-  TF_WORKING_DIR: "."
+  TF_WORKING_DIR: "./azure-vm"
   AZURE_REGION: "East US"
 
-jobs:
+concurrency:
+  group: terraform-azure-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
-  # ==========================================================
-  # 1. Terraform Format / Validate
-  # ==========================================================
+jobs:
+  # 1. Formatting and static validation
   terraform-validate:
-    name: Terraform Validate
+    name: Terraform Format and Validate
     runs-on: ubuntu-latest
 
     steps:
@@ -38,25 +36,19 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      - name: Terraform Init
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: |
-          terraform init \
-            -backend=false \
-            -input=false
-
-      - name: Terraform Format
-        working-directory: ${{ env.TF_WORKING_DIR }}
+      # Check all Terraform files in the repository, including azure-vm/security.tf.
+      - name: Terraform Format Check
         run: terraform fmt -check -recursive
+
+      - name: Terraform Init (validation only)
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform init -backend=false -input=false
 
       - name: Terraform Validate
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform validate
 
-
-  # ==========================================================
-  # 2. TFLint
-  # ==========================================================
+  # 2. Terraform lint
   tflint:
     name: TFLint
     needs: terraform-validate
@@ -65,6 +57,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
 
       - name: Setup TFLint
         uses: terraform-linters/setup-tflint@v4
@@ -77,10 +74,7 @@ jobs:
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: tflint --recursive
 
-
-  # ==========================================================
-  # 3. Checkov Security Scan
-  # ==========================================================
+  # 3. Checkov IaC security scan
   checkov:
     name: Checkov Security Scan
     needs: terraform-validate
@@ -98,10 +92,7 @@ jobs:
           quiet: true
           soft_fail: false
 
-
-  # ==========================================================
-  # 4. Trivy IaC Security Scan
-  # ==========================================================
+  # 4. Trivy IaC security scan
   trivy:
     name: Trivy IaC Scan
     needs: terraform-validate
@@ -111,18 +102,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Trivy Terraform Scan
+      - name: Run Trivy Terraform Scan
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: config
           scan-ref: .
           severity: HIGH,CRITICAL
-          exit-code: 1
+          exit-code: "1"
 
-
-  # ==========================================================
-  # 5. Gitleaks
-  # ==========================================================
+  # 5. Secret scanning
   gitleaks:
     name: Gitleaks Secret Scan
     needs: terraform-validate
@@ -134,15 +122,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Gitleaks
+      - name: Run Gitleaks
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-
-  # ==========================================================
-  # 6. Terraform Plan
-  # ==========================================================
+  # 6. Plan only on trusted deployment events.
+  # Do not authenticate to Azure for pull_request events.
   terraform-plan:
     name: Terraform Plan
     needs:
@@ -151,13 +137,12 @@ jobs:
       - checkov
       - trivy
       - gitleaks
-
+    if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
 
     permissions:
       contents: read
       id-token: write
-      pull-requests: write
 
     steps:
       - name: Checkout
@@ -168,57 +153,30 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      # --------------------------------------------------------
-      # Azure OIDC Authentication
-      # --------------------------------------------------------
-      - name: Azure Login
+      - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # --------------------------------------------------------
-      # Terraform Init
-      # --------------------------------------------------------
       - name: Terraform Init
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform init -input=false
 
-      # --------------------------------------------------------
-      # Terraform Plan
-      # --------------------------------------------------------
       - name: Terraform Plan
         working-directory: ${{ env.TF_WORKING_DIR }}
-        run: |
-          terraform plan \
-            -input=false \
-            -out=tfplan
+        run: terraform plan -input=false -out=tfplan
 
-      # --------------------------------------------------------
-      # Generate JSON Plan
-      # --------------------------------------------------------
-      - name: Terraform Show JSON
+      - name: Export Terraform Plan as JSON
         working-directory: ${{ env.TF_WORKING_DIR }}
-        run: |
-          terraform show \
-            -json \
-            tfplan > tfplan.json
+        run: terraform show -json tfplan > tfplan.json
 
-      # --------------------------------------------------------
-      # Generate Human Readable Plan
-      # --------------------------------------------------------
-      - name: Terraform Show
+      - name: Export Human-Readable Terraform Plan
         working-directory: ${{ env.TF_WORKING_DIR }}
-        run: |
-          terraform show \
-            -no-color \
-            tfplan > tfplan.txt
+        run: terraform show -no-color tfplan > tfplan.txt
 
-      # --------------------------------------------------------
-      # Upload Plan
-      # --------------------------------------------------------
-      - name: Upload Terraform Plan
+      - name: Upload Terraform Plan Artifact
         uses: actions/upload-artifact@v4
         with:
           name: terraform-plan
@@ -227,118 +185,36 @@ jobs:
             ${{ env.TF_WORKING_DIR }}/tfplan.json
             ${{ env.TF_WORKING_DIR }}/tfplan.txt
           if-no-files-found: error
+          retention-days: 5
 
-
-  # ==========================================================
-  # 7. PR Plan Comment
-  # ==========================================================
-  terraform-comment:
-    name: Terraform PR Comment
-    needs: terraform-plan
-
-    if: github.event_name == 'pull_request'
-
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-      pull-requests: write
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download Terraform Plan
-        uses: actions/download-artifact@v4
-        with:
-          name: terraform-plan
-          path: ${{ env.TF_WORKING_DIR }}
-
-      - name: Terraform PR Comment
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const fs = require('fs');
-
-            const plan = fs.readFileSync(
-              '${{ env.TF_WORKING_DIR }}/tfplan.txt',
-              'utf8'
-            );
-
-            const maxLength = 60000;
-
-            const output =
-              plan.length > maxLength
-                ? plan.substring(0, maxLength) +
-                  '\n\n... Plan output truncated.'
-                : plan;
-
-            const body = `
-            ## Terraform Plan
-
-            \`\`\`terraform
-            ${output}
-            \`\`\`
-            `;
-
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body
-            });
-
-
-  # ==========================================================
-  # 8. Production Approval
-  # ==========================================================
+  # 7. GitHub Environment protection rules provide the real approval gate.
+  # Configure required reviewers in Settings > Environments > production.
   terraform-approval:
     name: Production Approval
-    needs:
-      - terraform-plan
-
-    if: |
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/main' &&
-      needs.terraform-plan.result == 'success'
-
+    needs: terraform-plan
+    if: ${{ needs.terraform-plan.result == 'success' && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-latest
-
     environment:
       name: production
-
     permissions:
       contents: read
-
     steps:
-      - name: Approval
-        run: |
-          echo "Production deployment approved."
+      - name: Approval Gate
+        run: echo "GitHub Environment protection checks have passed."
 
-
-  # ==========================================================
-  # 9. Terraform Apply
-  # ==========================================================
+  # 8. Apply the exact saved plan after the production environment gate.
   terraform-apply:
     name: Terraform Apply
-    needs:
-      - terraform-approval
-
-    if: |
-      needs.terraform-approval.result == 'success'
-
+    needs: terraform-approval
+    if: ${{ needs.terraform-approval.result == 'success' }}
     runs-on: ubuntu-latest
-
     environment:
       name: production
-
     permissions:
       contents: read
       id-token: write
 
     steps:
-
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -347,39 +223,23 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      # --------------------------------------------------------
-      # Azure OIDC Login
-      # --------------------------------------------------------
-      - name: Azure Login
+      - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # --------------------------------------------------------
-      # Terraform Init
-      # --------------------------------------------------------
       - name: Terraform Init
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform init -input=false
 
-      # --------------------------------------------------------
-      # Download Approved Plan
-      # --------------------------------------------------------
-      - name: Download Terraform Plan
+      - name: Download Terraform Plan Artifact
         uses: actions/download-artifact@v4
         with:
           name: terraform-plan
           path: ${{ env.TF_WORKING_DIR }}
 
-      # --------------------------------------------------------
-      # Terraform Apply
-      # --------------------------------------------------------
       - name: Terraform Apply
         working-directory: ${{ env.TF_WORKING_DIR }}
-        run: |
-          terraform apply \
-            -input=false \
-            -auto-approve \
-            tfplan
+        run: terraform apply -input=false -auto-approve tfplan
