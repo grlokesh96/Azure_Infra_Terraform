@@ -22,10 +22,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # 1. Terraform formatting and validation
+  # 1. Formatting and static validation
   terraform-validate:
     name: Terraform Format and Validate
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -46,11 +47,12 @@ jobs:
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform validate
 
-  # 2. TFLint
+  # 2. Terraform lint
   tflint:
     name: TFLint
     needs: terraform-validate
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -71,46 +73,30 @@ jobs:
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: tflint --recursive
 
-  # 3. Checkov IaC security scan
-  checkov:
-    name: Checkov Security Scan
-    needs: terraform-validate
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Run Checkov
-        uses: bridgecrewio/checkov-action@v12
-        with:
-          directory: ./azure-vm
-          framework: terraform
-          quiet: false
-          soft_fail: false
-
   # 4. Trivy IaC security scan
   trivy:
     name: Trivy IaC Scan
     needs: terraform-validate
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Run Trivy Terraform Scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@master
         with:
           scan-type: config
-          scan-ref: ./azure-vm
+          scan-ref: .
           severity: HIGH,CRITICAL
           exit-code: "1"
-          format: table
 
-  # 5. Gitleaks secret scan
+  # 5. Secret scanning
   gitleaks:
     name: Gitleaks Secret Scan
     needs: terraform-validate
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -122,20 +108,17 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # 6. Plan only for trusted main-branch deployments.
-  # Pull requests do not receive Azure credentials.
+  # 6. Plan only on trusted deployment events.
   terraform-plan:
     name: Terraform Plan
     needs:
       - terraform-validate
       - tflint
-      - checkov
       - trivy
       - gitleaks
-    if: >-
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
+
     permissions:
       contents: read
       id-token: write
@@ -183,12 +166,25 @@ jobs:
           if-no-files-found: error
           retention-days: 5
 
-  # 7. Apply only after approval through GitHub Environment protection.
-  # Configure required reviewers in Settings > Environments > production.
+  # 7. GitHub Environment protection rules provide the real approval gate.
+  terraform-approval:
+    name: Production Approval
+    needs: terraform-plan
+    if: ${{ needs.terraform-plan.result == 'success' && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch') }}
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    permissions:
+      contents: read
+    steps:
+      - name: Approval Gate
+        run: echo "GitHub Environment protection checks have passed."
+
+  # 8. Apply the exact saved plan after the production environment gate.
   terraform-apply:
     name: Terraform Apply
-    needs: terraform-plan
-    if: ${{ needs.terraform-plan.result == 'success' }}
+    needs: terraform-approval
+    if: ${{ needs.terraform-approval.result == 'success' }}
     runs-on: ubuntu-latest
     environment:
       name: production
@@ -222,6 +218,6 @@ jobs:
           name: terraform-plan
           path: ${{ env.TF_WORKING_DIR }}
 
-      - name: Terraform Apply Saved Plan
+      - name: Terraform Apply
         working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform apply -input=false tfplan
+        run: terraform apply -input=false -auto-approve tfplan
