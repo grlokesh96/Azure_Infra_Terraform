@@ -1,4 +1,4 @@
-subscription_id = "a2b28c85-1948-4263-90ca-bade2bac4df4"
+subscription_id = "00000000-0000-0000-0000-000000000000"
 
 location = "East US"
 
@@ -8,6 +8,6 @@ environment = "prod"
 
 admin_username = "azureadmin"
 
-ssh_public_key = "ssh-ed25519 AAAA...your-public-key..."
+ssh_public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA...your-public-key..."
 
-allowed_ssh_cidr = "YOUR.PUBLIC.IP.ADDRESS/32"
+allowed_ssh_cidr = "203.0.113.10/32"
