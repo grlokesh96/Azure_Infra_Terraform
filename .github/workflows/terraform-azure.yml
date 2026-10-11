@@ -22,11 +22,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # 1. Formatting and static validation
+  # 1. Terraform formatting and validation
   terraform-validate:
     name: Terraform Format and Validate
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,7 +35,6 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      # Check all Terraform files in the repository, including azure-vm/security.tf.
       - name: Terraform Format Check
         run: terraform fmt -check -recursive
 
@@ -48,12 +46,11 @@ jobs:
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform validate
 
-  # 2. Terraform lint
+  # 2. TFLint
   tflint:
     name: TFLint
     needs: terraform-validate
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -74,48 +71,46 @@ jobs:
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: tflint --recursive
 
-  # # 3. Checkov IaC security scan
-  # checkov:
-  #   name: Checkov Security Scan
-  #   needs: terraform-validate
-  #   runs-on: ubuntu-latest
+  # 3. Checkov IaC security scan
+  checkov:
+    name: Checkov Security Scan
+    needs: terraform-validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v4
-
-  #     - name: Run Checkov
-  #       uses: bridgecrewio/checkov-action@v12
-  #       with:
-  #         directory: .
-  #         framework: terraform
-  #         quiet: true
-  #         soft_fail: false
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: ./azure-vm
+          framework: terraform
+          quiet: false
+          soft_fail: false
 
   # 4. Trivy IaC security scan
   trivy:
     name: Trivy IaC Scan
     needs: terraform-validate
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Run Trivy Terraform Scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           scan-type: config
-          scan-ref: .
+          scan-ref: ./azure-vm
           severity: HIGH,CRITICAL
           exit-code: "1"
+          format: table
 
-  # 5. Secret scanning
+  # 5. Gitleaks secret scan
   gitleaks:
     name: Gitleaks Secret Scan
     needs: terraform-validate
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -127,8 +122,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # 6. Plan only on trusted deployment events.
-  # Do not authenticate to Azure for pull_request events.
+  # 6. Plan only for trusted main-branch deployments.
+  # Pull requests do not receive Azure credentials.
   terraform-plan:
     name: Terraform Plan
     needs:
@@ -137,9 +132,10 @@ jobs:
       - checkov
       - trivy
       - gitleaks
-    if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch' }}
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
-
     permissions:
       contents: read
       id-token: write
@@ -187,26 +183,12 @@ jobs:
           if-no-files-found: error
           retention-days: 5
 
-  # 7. GitHub Environment protection rules provide the real approval gate.
+  # 7. Apply only after approval through GitHub Environment protection.
   # Configure required reviewers in Settings > Environments > production.
-  terraform-approval:
-    name: Production Approval
-    needs: terraform-plan
-    if: ${{ needs.terraform-plan.result == 'success' && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch') }}
-    runs-on: ubuntu-latest
-    environment:
-      name: production
-    permissions:
-      contents: read
-    steps:
-      - name: Approval Gate
-        run: echo "GitHub Environment protection checks have passed."
-
-  # 8. Apply the exact saved plan after the production environment gate.
   terraform-apply:
     name: Terraform Apply
-    needs: terraform-approval
-    if: ${{ needs.terraform-approval.result == 'success' }}
+    needs: terraform-plan
+    if: ${{ needs.terraform-plan.result == 'success' }}
     runs-on: ubuntu-latest
     environment:
       name: production
@@ -240,6 +222,6 @@ jobs:
           name: terraform-plan
           path: ${{ env.TF_WORKING_DIR }}
 
-      - name: Terraform Apply
+      - name: Terraform Apply Saved Plan
         working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform apply -input=false -auto-approve tfplan
+        run: terraform apply -input=false tfplan
