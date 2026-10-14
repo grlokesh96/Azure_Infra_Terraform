@@ -2,27 +2,27 @@ name: Terraform Azure CI/CD
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - "azure-vm/**"
       - "aks-cluster/**"
       - ".github/workflows/terraform-azure.yml"
 
   pull_request:
-    branches:
-      - main
+    branches: [main]
     paths:
       - "azure-vm/**"
       - "aks-cluster/**"
+
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 env:
   TF_VERSION: "1.9.8"
-  TF_WORKING_DIR: "./azure-vm"
-  AZURE_REGION: "East US"
+  TF_IN_AUTOMATION: "true"
+  TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.terraform.d/plugin-cache
   ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
   ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
   ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
@@ -32,10 +32,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # 1. Formatting and static validation
-  terraform-validate:
-    name: Terraform Format and Validate
+  # 1. Format, validate and lint every Terraform root in parallel.
+  validate:
+    name: Validate & Lint (${{ matrix.root }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        root: [azure-vm, aks-cluster]
 
     steps:
       - name: Checkout
@@ -45,66 +49,39 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Cache Terraform providers
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.TF_PLUGIN_CACHE_DIR }}
+          key: tf-providers-${{ runner.os }}-${{ hashFiles('**/.terraform.lock.hcl') }}
+          restore-keys: tf-providers-${{ runner.os }}-
 
       - name: Terraform Format Check
         run: terraform fmt -check -recursive
 
-      - name: Terraform Init (validation only)
-        working-directory: ${{ env.TF_WORKING_DIR }}
+      - name: Terraform Init
+        working-directory: ${{ matrix.root }}
         run: terraform init -backend=false -input=false
 
       - name: Terraform Validate
-        working-directory: ${{ env.TF_WORKING_DIR }}
+        working-directory: ${{ matrix.root }}
         run: terraform validate
-
-  # 2. Terraform lint
-  tflint:
-    name: TFLint
-    needs: terraform-validate
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
 
       - name: Setup TFLint
         uses: terraform-linters/setup-tflint@v4
-
-      - name: Initialize TFLint
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: tflint --init
-
-      - name: Run TFLint
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: tflint --recursive
-
-  # 4. Trivy IaC security scan
-  trivy:
-    name: Trivy IaC Scan
-    needs: terraform-validate
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Run Trivy Terraform Scan
-        uses: aquasecurity/trivy-action@master
         with:
-          scan-type: config
-          scan-ref: .
-          severity: HIGH,CRITICAL
-          exit-code: "1"
+          tflint_version: latest
 
-  # 5. Secret scanning
-  gitleaks:
-    name: Gitleaks Secret Scan
-    needs: terraform-validate
+      - name: TFLint
+        working-directory: ${{ matrix.root }}
+        run: |
+          tflint --init
+          tflint --recursive
+
+  # 2. Static security scanning (Trivy IaC + Gitleaks) in one job.
+  security:
+    name: Security Scan
     runs-on: ubuntu-latest
 
     steps:
@@ -113,24 +90,32 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Run Gitleaks
+      - name: Trivy IaC Scan
+        uses: aquasecurity/trivy-action@v0.33.1
+        with:
+          scan-type: config
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+
+      - name: Remove Trivy Envs file
+        if: always()
+        run: rm -f trivy_envs.txt
+
+      - name: Gitleaks Secret Scan
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # 6. Plan only on trusted deployment events.
-  terraform-plan:
+  # 3. Plan on trusted deployment events only.
+  plan:
     name: Terraform Plan
-    needs:
-      - terraform-validate
-      - tflint
-      - trivy
-      - gitleaks
+    needs: [validate, security]
     if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
+    defaults:
+      run:
+        working-directory: ./azure-vm
 
     steps:
       - name: Checkout
@@ -141,7 +126,14 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      - name: Azure CLI Login (Service Principal Client Secret)
+      - name: Cache Terraform providers
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.TF_PLUGIN_CACHE_DIR }}
+          key: tf-providers-${{ runner.os }}-${{ hashFiles('**/.terraform.lock.hcl') }}
+          restore-keys: tf-providers-${{ runner.os }}-
+
+      - name: Azure Login
         run: |
           az login --service-principal \
             --username "${{ secrets.AZURE_CLIENT_ID }}" \
@@ -150,56 +142,38 @@ jobs:
           az account set --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
 
       - name: Terraform Init
-        working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform init -input=false
 
       - name: Terraform Plan
-        working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform plan -input=false -out=tfplan
 
-      - name: Export Terraform Plan as JSON
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform show -json tfplan > tfplan.json
+      - name: Export Plan
+        run: |
+          terraform show -json tfplan > tfplan.json
+          terraform show -no-color tfplan > tfplan.txt
 
-      - name: Export Human-Readable Terraform Plan
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform show -no-color tfplan > tfplan.txt
-
-      - name: Upload Terraform Plan Artifact
+      - name: Upload Plan Artifact
         uses: actions/upload-artifact@v4
         with:
           name: terraform-plan
           path: |
-            ${{ env.TF_WORKING_DIR }}/tfplan
-            ${{ env.TF_WORKING_DIR }}/tfplan.json
-            ${{ env.TF_WORKING_DIR }}/tfplan.txt
+            azure-vm/tfplan
+            azure-vm/tfplan.json
+            azure-vm/tfplan.txt
           if-no-files-found: error
           retention-days: 5
 
-  # 7. GitHub Environment protection rules provide the real approval gate.
-  terraform-approval:
-    name: Production Approval
-    needs: terraform-plan
-    if: ${{ needs.terraform-plan.result == 'success' && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch') }}
-    runs-on: ubuntu-latest
-    environment:
-      name: production
-    permissions:
-      contents: read
-    steps:
-      - name: Approval Gate
-        run: echo "GitHub Environment protection checks have passed."
-
-  # 8. Apply the exact saved plan after the production environment gate.
-  terraform-apply:
+  # 4. Apply the saved plan behind the production environment gate.
+  apply:
     name: Terraform Apply
-    needs: terraform-approval
-    if: ${{ needs.terraform-approval.result == 'success' }}
+    needs: plan
+    if: ${{ needs.plan.result == 'success' }}
     runs-on: ubuntu-latest
     environment:
       name: production
-    permissions:
-      contents: read
+    defaults:
+      run:
+        working-directory: ./azure-vm
 
     steps:
       - name: Checkout
@@ -210,7 +184,14 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      - name: Azure CLI Login (Service Principal Client Secret)
+      - name: Cache Terraform providers
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.TF_PLUGIN_CACHE_DIR }}
+          key: tf-providers-${{ runner.os }}-${{ hashFiles('**/.terraform.lock.hcl') }}
+          restore-keys: tf-providers-${{ runner.os }}-
+
+      - name: Azure Login
         run: |
           az login --service-principal \
             --username "${{ secrets.AZURE_CLIENT_ID }}" \
@@ -219,15 +200,13 @@ jobs:
           az account set --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
 
       - name: Terraform Init
-        working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform init -input=false
 
-      - name: Download Terraform Plan Artifact
+      - name: Download Plan Artifact
         uses: actions/download-artifact@v4
         with:
           name: terraform-plan
-          path: ${{ env.TF_WORKING_DIR }}
+          path: azure-vm
 
       - name: Terraform Apply
-        working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform apply -input=false -auto-approve tfplan

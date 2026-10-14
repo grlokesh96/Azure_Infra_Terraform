@@ -10,6 +10,10 @@ resource "azurerm_kubernetes_cluster" "aks" {
   role_based_access_control_enabled = true
   local_account_disabled            = true
 
+  api_server_access_profile {
+    authorized_ip_ranges = var.authorized_ip_ranges
+  }
+
   identity {
     type = "SystemAssigned"
   }

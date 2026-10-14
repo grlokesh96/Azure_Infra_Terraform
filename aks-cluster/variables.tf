@@ -31,6 +31,16 @@ variable "kubernetes_version" {
   default     = null
 }
 
+variable "authorized_ip_ranges" {
+  description = "CIDR ranges allowed to reach the AKS API server (empty means public access)"
+  type        = list(string)
+
+  validation {
+    condition     = length(var.authorized_ip_ranges) > 0
+    error_message = "At least one authorized IP range must be specified to restrict API server access."
+  }
+}
+
 variable "system_node_count" {
   type    = number
   default = 2
