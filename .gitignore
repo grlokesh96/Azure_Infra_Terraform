@@ -33,4 +33,4 @@ override.tf.json
 terraform.rc
 
 # Ignore lock file - it's good practice to commit .terraform.lock.hcl
-# but sometimes people prefer not to; the original has it initialized, so keep as is
+# but sometimes people prefer not to; the original has it initialized, so keep as is like
