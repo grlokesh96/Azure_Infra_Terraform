@@ -6,6 +6,6 @@ cluster_name        = "aks-dev"
 # Replace with a globally unique name (lowercase letters and numbers).
 acr_name = "lokeshacrdev12345"
 
-system_node_count = 2
-user_min_count    = 1
-user_max_count    = 2
+system_node_count   = 2
+user_min_node_count = 1
+user_max_node_count = 2

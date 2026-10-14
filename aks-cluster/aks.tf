@@ -4,7 +4,7 @@ resource "azurerm_kubernetes_cluster" "aks" {
   resource_group_name = azurerm_resource_group.aks.name
   dns_prefix          = "aks-prod"
 
-  sku_tier        = "Standard"
+  sku_tier           = "Standard"
   kubernetes_version = var.kubernetes_version
 
   role_based_access_control_enabled = true
@@ -50,6 +50,10 @@ resource "azurerm_kubernetes_cluster" "aks" {
 
   oidc_issuer_enabled       = true
   workload_identity_enabled = true
+
+  node_provisioning_profile {
+    mode = "Manual"
+  }
 
   oms_agent {
     log_analytics_workspace_id = azurerm_log_analytics_workspace.aks.id

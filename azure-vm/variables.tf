@@ -27,9 +27,10 @@ variable "admin_username" {
   default     = "azureadmin"
 }
 
-variable "ssh_public_key" {
-  description = "SSH public key"
+variable "admin_password" {
+  description = "Linux administrator password (min 12 chars, must include upper, lower, digit and special character)"
   type        = string
+  sensitive   = true
 }
 
 variable "allowed_ssh_cidr" {

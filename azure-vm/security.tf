@@ -26,8 +26,6 @@ resource "azurerm_public_ip" "vm" {
   allocation_method = "Static"
   sku               = "Standard"
 
-  zones = ["1", "2", "3"]
-
   tags = local.tags
 }
 

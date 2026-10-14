@@ -5,14 +5,16 @@ on:
     branches:
       - main
     paths:
-      - "terraform/aks/**"
-      - ".github/workflows/terraform-aks.yml"
+      - "azure-vm/**"
+      - "aks-cluster/**"
+      - ".github/workflows/terraform-azure.yml"
 
   pull_request:
     branches:
       - main
     paths:
-      - "terraform/aks/**"
+      - "azure-vm/**"
+      - "aks-cluster/**"
 
 permissions:
   contents: read
