@@ -93,6 +93,9 @@ jobs:
       - name: Trivy IaC Scan
         uses: aquasecurity/trivy-action@v0.33.1
         with:
+          # Pin to a released Trivy version: trivy-action's default (v0.65.0)
+          # has had its release assets removed upstream, which breaks setup-trivy.
+          version: v0.69.3
           scan-type: config
           scan-ref: .
           severity: HIGH,CRITICAL
