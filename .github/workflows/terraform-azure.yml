@@ -4,10 +4,15 @@ on:
   push:
     branches:
       - main
+    paths:
+      - "terraform/aks/**"
+      - ".github/workflows/terraform-aks.yml"
+
   pull_request:
     branches:
       - main
-  workflow_dispatch:
+    paths:
+      - "terraform/aks/**"
 
 permissions:
   contents: read
