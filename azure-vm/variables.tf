@@ -6,33 +6,50 @@ variable "subscription_id" {
 variable "location" {
   description = "Azure region"
   type        = string
-  default     = "East US"
+  default     = "centralindia"
 }
 
-variable "environment" {
-  description = "Environment name"
+variable "resource_group_name" {
+  description = "Name of the resource group"
   type        = string
-  default     = "prod"
+  default     = "rg-devops-vm"
 }
 
-variable "project_name" {
-  description = "Project name"
+variable "vm_name" {
+  description = "Name of the virtual machine"
   type        = string
-  default     = "platform"
+  default     = "vm-devops-01"
+}
+
+variable "vm_size" {
+  description = "VM SKU"
+  type        = string
+  default     = "Standard_B2s"
 }
 
 variable "admin_username" {
-  description = "Linux administrator username"
+  description = "Admin username for the VM"
   type        = string
-  default     = "azureadmin"
+  default     = "azureuser"
 }
 
-variable "admin_ssh_public_key" {
-  description = "SSH public key authorized for the Linux administrator account"
+variable "ssh_public_key_path" {
+  description = "Path to your SSH public key"
   type        = string
+  default     = "~/.ssh/id_rsa.pub"
 }
 
 variable "allowed_ssh_cidr" {
-  description = "CIDR allowed to access SSH"
+  description = "CIDR allowed to reach SSH (restrict this to your IP)"
   type        = string
+  default     = "0.0.0.0/0"
+}
+
+variable "tags" {
+  description = "Tags applied to all resources"
+  type        = map(string)
+  default = {
+    environment = "dev"
+    managed_by  = "terraform"
+  }
 }
