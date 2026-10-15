@@ -4,7 +4,6 @@ on:
   push:
     branches: [main]
     paths:
-      - "azure-vm/**"
       - "aks-cluster/**"
       - ".github/workflows/terraform-azure.yml"
 
