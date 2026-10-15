@@ -10,7 +10,6 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - "azure-vm/**"
       - "aks-cluster/**"
 
   workflow_dispatch:
