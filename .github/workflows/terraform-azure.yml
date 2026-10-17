@@ -31,14 +31,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # 1. Format, validate and lint every Terraform root in parallel.
+  # 1. Format, validate and lint the AKS Terraform root.
   validate:
     name: Validate & Lint (${{ matrix.root }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        root: [azure-vm, aks-cluster]
+        root: [aks-cluster]
 
     steps:
       - name: Checkout
@@ -57,7 +57,8 @@ jobs:
           restore-keys: tf-providers-${{ runner.os }}-
 
       - name: Terraform Format Check
-        run: terraform fmt -check -recursive
+        working-directory: ${{ matrix.root }}
+        run: terraform fmt -check
 
       - name: Terraform Init
         working-directory: ${{ matrix.root }}
@@ -117,7 +118,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./azure-vm
+        working-directory: ./aks-cluster
 
     steps:
       - name: Checkout
@@ -159,9 +160,9 @@ jobs:
         with:
           name: terraform-plan
           path: |
-            azure-vm/tfplan
-            azure-vm/tfplan.json
-            azure-vm/tfplan.txt
+            aks-cluster/tfplan
+            aks-cluster/tfplan.json
+            aks-cluster/tfplan.txt
           if-no-files-found: error
           retention-days: 5
 
@@ -175,7 +176,7 @@ jobs:
       name: production
     defaults:
       run:
-        working-directory: ./azure-vm
+        working-directory: ./aks-cluster
 
     steps:
       - name: Checkout
@@ -208,7 +209,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: terraform-plan
-          path: azure-vm
+          path: aks-cluster
 
       - name: Terraform Apply
         run: terraform apply -input=false -auto-approve tfplan
