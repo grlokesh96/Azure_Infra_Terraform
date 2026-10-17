@@ -1,7 +1,7 @@
 resource "azurerm_container_registry" "aks" {
   name                = var.acr_name
-  resource_group_name = azurerm_resource_group.aks.name
-  location            = azurerm_resource_group.aks.location
+  resource_group_name = data.azurerm_resource_group.aks.name
+  location            = data.azurerm_resource_group.aks.location
 
   sku           = "Standard"
   admin_enabled = false

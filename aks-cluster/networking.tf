@@ -1,28 +1,28 @@
 resource "azurerm_virtual_network" "aks" {
   name                = "vnet-aks-prod"
-  location            = azurerm_resource_group.aks.location
-  resource_group_name = azurerm_resource_group.aks.name
+  location            = data.azurerm_resource_group.aks.location
+  resource_group_name = data.azurerm_resource_group.aks.name
   address_space       = ["10.0.0.0/16"]
 }
 
 resource "azurerm_subnet" "system" {
   name                 = "snet-aks-system"
-  resource_group_name  = azurerm_resource_group.aks.name
+  resource_group_name  = data.azurerm_resource_group.aks.name
   virtual_network_name = azurerm_virtual_network.aks.name
   address_prefixes     = ["10.0.1.0/24"]
 }
 
 resource "azurerm_subnet" "user" {
   name                 = "snet-aks-user"
-  resource_group_name  = azurerm_resource_group.aks.name
+  resource_group_name  = data.azurerm_resource_group.aks.name
   virtual_network_name = azurerm_virtual_network.aks.name
   address_prefixes     = ["10.0.2.0/23"]
 }
 
 resource "azurerm_public_ip" "nat" {
   name                = "pip-aks-nat"
-  location            = azurerm_resource_group.aks.location
-  resource_group_name = azurerm_resource_group.aks.name
+  location            = data.azurerm_resource_group.aks.location
+  resource_group_name = data.azurerm_resource_group.aks.name
 
   allocation_method = "Static"
   sku               = "Standard"
@@ -30,8 +30,8 @@ resource "azurerm_public_ip" "nat" {
 
 resource "azurerm_nat_gateway" "aks" {
   name                = "nat-aks-prod"
-  location            = azurerm_resource_group.aks.location
-  resource_group_name = azurerm_resource_group.aks.name
+  location            = data.azurerm_resource_group.aks.location
+  resource_group_name = data.azurerm_resource_group.aks.name
 
   sku_name                = "Standard"
   idle_timeout_in_minutes = 10
