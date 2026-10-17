@@ -64,10 +64,6 @@ resource "azurerm_kubernetes_cluster" "aks" {
     mode = "Manual"
   }
 
-  oms_agent {
-    log_analytics_workspace_id = azurerm_log_analytics_workspace.aks.id
-  }
-
   tags = {
     Environment = "Production"
     ManagedBy   = "Terraform"
