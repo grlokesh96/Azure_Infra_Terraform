@@ -97,7 +97,7 @@ jobs:
           # has had its release assets removed upstream, which breaks setup-trivy.
           version: v0.69.3
           scan-type: config
-          scan-ref: .
+          scan-ref: aks-cluster
           severity: HIGH,CRITICAL
           exit-code: "1"
 
