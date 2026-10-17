@@ -1,5 +1,4 @@
 subscription_id     = "a2b28c85-1948-4263-90ca-bade2bac4df4"
-location            = "East US"
 resource_group_name = "kml_rg_main-ec409722ed014899"
 cluster_name        = "aks-dev"
 

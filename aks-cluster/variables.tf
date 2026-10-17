@@ -4,12 +4,6 @@ variable "subscription_id" {
   sensitive   = true
 }
 
-variable "location" {
-  description = "Azure region"
-  type        = string
-  default     = "East US"
-}
-
 variable "resource_group_name" {
   type    = string
   default = "rg-aks-prod"
