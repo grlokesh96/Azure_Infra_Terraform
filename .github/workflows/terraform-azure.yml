@@ -155,8 +155,7 @@ jobs:
             -backend-config="container_name=${TF_STATE_CONTAINER}" \
             -backend-config="key=aks-cluster.tfstate" \
             -backend-config="subscription_id=${ARM_SUBSCRIPTION_ID}" \
-            -backend-config="use_azuread_auth=true" \
-            -backend-config="use_cli=true"
+            -backend-config="use_azuread_auth=true"
 
       - name: Terraform Plan
         run: terraform plan -input=false -out=tfplan
@@ -221,8 +220,7 @@ jobs:
             -backend-config="container_name=${TF_STATE_CONTAINER}" \
             -backend-config="key=aks-cluster.tfstate" \
             -backend-config="subscription_id=${ARM_SUBSCRIPTION_ID}" \
-            -backend-config="use_azuread_auth=true" \
-            -backend-config="use_cli=true"
+            -backend-config="use_azuread_auth=true"
 
       - name: Download Plan Artifact
         uses: actions/download-artifact@v4
