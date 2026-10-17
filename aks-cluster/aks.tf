@@ -10,6 +10,11 @@ resource "azurerm_kubernetes_cluster" "aks" {
   role_based_access_control_enabled = true
   local_account_disabled            = true
 
+  azure_active_directory_role_based_access_control {
+    tenant_id          = data.azurerm_client_config.current.tenant_id
+    azure_rbac_enabled = true
+  }
+
   api_server_access_profile {
     authorized_ip_ranges = var.authorized_ip_ranges
   }

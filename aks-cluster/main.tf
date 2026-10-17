@@ -8,3 +8,5 @@ resource "azurerm_resource_group" "aks" {
     Project     = "AKS"
   }
 }
+
+data "azurerm_client_config" "current" {}
