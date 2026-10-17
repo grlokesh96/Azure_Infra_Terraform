@@ -40,9 +40,18 @@ variable "ssh_public_key_path" {
 }
 
 variable "allowed_ssh_cidr" {
-  description = "CIDR allowed to reach SSH (restrict this to your IP)"
+  description = "Specific CIDR allowed to reach SSH"
   type        = string
-  default     = "0.0.0.0/0"
+
+  validation {
+    condition = can(cidrhost(var.allowed_ssh_cidr, 0)) && !contains([
+      "0.0.0.0/0",
+      "::/0",
+      "*",
+      "Internet"
+    ], var.allowed_ssh_cidr)
+    error_message = "allowed_ssh_cidr must be a specific CIDR and cannot allow access from the entire internet."
+  }
 }
 
 variable "tags" {
