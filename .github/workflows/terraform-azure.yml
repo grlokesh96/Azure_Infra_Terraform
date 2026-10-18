@@ -1,3 +1,4 @@
+
 name: Terraform Azure CI/CD
 
 on:
@@ -35,7 +36,6 @@ env:
   ARM_SUBSCRIPTION_ID: ${{ vars.ARM_SUBSCRIPTION_ID }}
 
 jobs:
-  # 1. Format, validate and lint every Terraform root in parallel.
   validate:
     name: Validate & Lint (${{ matrix.root }})
     runs-on: ubuntu-latest
@@ -86,7 +86,6 @@ jobs:
           tflint --init
           tflint
 
-  # 2. Static security scanning (Trivy IaC + Gitleaks).
   security:
     name: Security Scan
     runs-on: ubuntu-latest
@@ -115,7 +114,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # 3. Plan trusted deployment events only. This job plans AKS only.
   plan:
     name: Terraform Plan (AKS)
     needs: [validate, security]
@@ -134,6 +132,31 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
+      - name: Verify Azure OIDC Variables
+        shell: bash
+        run: |
+          test -n "$ARM_CLIENT_ID" || {
+            echo "::error::ARM_CLIENT_ID is missing"
+            exit 1
+          }
+          test -n "$ARM_TENANT_ID" || {
+            echo "::error::ARM_TENANT_ID is missing"
+            exit 1
+          }
+          test -n "$ARM_SUBSCRIPTION_ID" || {
+            echo "::error::ARM_SUBSCRIPTION_ID is missing"
+            exit 1
+          }
+          echo "Azure OIDC variables are present."
+
+      - name: Azure Login using OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.ARM_CLIENT_ID }}
+          tenant-id: ${{ vars.ARM_TENANT_ID }}
+          subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
+          audience: api://AzureADTokenExchange
+
       - name: Create Terraform plugin cache
         run: mkdir -p "$TF_PLUGIN_CACHE_DIR"
 
@@ -143,13 +166,6 @@ jobs:
           path: ${{ env.TF_PLUGIN_CACHE_DIR }}
           key: tf-providers-${{ runner.os }}-${{ hashFiles('**/.terraform.lock.hcl') }}
           restore-keys: tf-providers-${{ runner.os }}-
-
-      - name: Azure Login using OIDC
-        uses: azure/login@v2
-        with:
-          client-id: ${{ vars.ARM_CLIENT_ID }}
-          tenant-id: ${{ vars.ARM_TENANT_ID }}
-          subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
 
       - name: Terraform Init
         run: terraform init -input=false
@@ -173,7 +189,6 @@ jobs:
           if-no-files-found: error
           retention-days: 5
 
-  # 4. Apply saved plan after approval through the production environment.
   apply:
     name: Terraform Apply (AKS)
     needs: plan
@@ -194,6 +209,31 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
+      - name: Verify Azure OIDC Variables
+        shell: bash
+        run: |
+          test -n "$ARM_CLIENT_ID" || {
+            echo "::error::ARM_CLIENT_ID is missing"
+            exit 1
+          }
+          test -n "$ARM_TENANT_ID" || {
+            echo "::error::ARM_TENANT_ID is missing"
+            exit 1
+          }
+          test -n "$ARM_SUBSCRIPTION_ID" || {
+            echo "::error::ARM_SUBSCRIPTION_ID is missing"
+            exit 1
+          }
+          echo "Azure OIDC variables are present."
+
+      - name: Azure Login using OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.ARM_CLIENT_ID }}
+          tenant-id: ${{ vars.ARM_TENANT_ID }}
+          subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
+          audience: api://AzureADTokenExchange
+
       - name: Create Terraform plugin cache
         run: mkdir -p "$TF_PLUGIN_CACHE_DIR"
 
@@ -203,13 +243,6 @@ jobs:
           path: ${{ env.TF_PLUGIN_CACHE_DIR }}
           key: tf-providers-${{ runner.os }}-${{ hashFiles('**/.terraform.lock.hcl') }}
           restore-keys: tf-providers-${{ runner.os }}-
-
-      - name: Azure Login using OIDC
-        uses: azure/login@v2
-        with:
-          client-id: ${{ vars.ARM_CLIENT_ID }}
-          tenant-id: ${{ vars.ARM_TENANT_ID }}
-          subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
 
       - name: Terraform Init
         run: terraform init -input=false
