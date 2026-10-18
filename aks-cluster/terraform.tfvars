@@ -1,13 +1,8 @@
-subscription_id     = "a2b28c85-1948-4263-90ca-bade2bac4df4"
-resource_group_name = "kml_rg_main-ec409722ed014899"
-cluster_name        = "aks-dev"
+subscription_id     = "00000000-0000-0000-0000-000000000000"
+location            = "East US"
+resource_group_name = "rg-aks-terraform"
+cluster_name        = "aks-terraform-demo"
+dns_prefix          = "akstfdemo"
+node_vm_size        = "Standard_D2s_v3"
+node_count          = 1
 
-# Replace with a globally unique name (lowercase letters and numbers).
-acr_name = "lokeshacrdev12345"
-
-# Restrict AKS API server access to trusted CIDR ranges only.
-authorized_ip_ranges = ["203.0.113.10/32"]
-
-system_node_count   = 2
-user_min_node_count = 1
-user_max_node_count = 2
