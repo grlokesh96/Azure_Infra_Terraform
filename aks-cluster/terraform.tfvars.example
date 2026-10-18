@@ -1,0 +1,15 @@
+# Copy this file to terraform.tfvars and fill in your values.
+# terraform.tfvars is intentionally not committed (see .gitignore).
+subscription_id = "00000000-0000-0000-0000-000000000000"
+location        = "East US"
+
+resource_group_name = "rg-aks-terraform"
+cluster_name        = "aks-terraform-demo"
+dns_prefix          = "akstfdemo"
+
+node_vm_size = "Standard_D2s_v3"
+node_count   = 1
+
+# Restrict the AKS API server to trusted CIDR ranges only.
+# Replace the placeholder with your own public IP/CIDR, e.g. ["1.2.3.4/32"].
+authorized_ip_ranges = ["203.0.113.10/32"]

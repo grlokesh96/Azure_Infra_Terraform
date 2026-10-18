@@ -6,37 +6,30 @@ variable "subscription_id" {
 variable "location" {
   description = "Azure region"
   type        = string
-  default     = "centralindia"
+  default     = "East US"
 }
 
-variable "resource_group_name" {
-  description = "Name of the resource group"
+variable "environment" {
+  description = "Environment name"
   type        = string
-  default     = "rg-devops-vm"
+  default     = "prod"
 }
 
-variable "vm_name" {
-  description = "Name of the virtual machine"
+variable "project_name" {
+  description = "Project name"
   type        = string
-  default     = "vm-devops-01"
-}
-
-variable "vm_size" {
-  description = "VM SKU"
-  type        = string
-  default     = "Standard_B2s"
+  default     = "platform"
 }
 
 variable "admin_username" {
-  description = "Admin username for the VM"
+  description = "Linux administrator username"
   type        = string
-  default     = "azureuser"
+  default     = "azureadmin"
 }
 
-variable "ssh_public_key_path" {
-  description = "Path to your SSH public key"
+variable "admin_ssh_public_key" {
+  description = "SSH public key authorized for the Linux administrator account"
   type        = string
-  default     = "~/.ssh/id_rsa.pub"
 }
 
 variable "allowed_ssh_cidr" {
@@ -51,14 +44,5 @@ variable "allowed_ssh_cidr" {
       "Internet"
     ], var.allowed_ssh_cidr)
     error_message = "allowed_ssh_cidr must be a specific CIDR and cannot allow access from the entire internet."
-  }
-}
-
-variable "tags" {
-  description = "Tags applied to all resources"
-  type        = map(string)
-  default = {
-    environment = "dev"
-    managed_by  = "terraform"
   }
 }

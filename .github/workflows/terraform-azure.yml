@@ -4,12 +4,14 @@ on:
   push:
     branches: [main]
     paths:
+      - "azure-vm/**"
       - "aks-cluster/**"
       - ".github/workflows/terraform-azure.yml"
 
   pull_request:
     branches: [main]
     paths:
+      - "azure-vm/**"
       - "aks-cluster/**"
 
   workflow_dispatch:
@@ -25,23 +27,20 @@ env:
   ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
   ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
   TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-  TF_STATE_RESOURCE_GROUP: ${{ vars.TF_STATE_RESOURCE_GROUP }}
-  TF_STATE_STORAGE_ACCOUNT: ${{ vars.TF_STATE_STORAGE_ACCOUNT }}
-  TF_STATE_CONTAINER: ${{ vars.TF_STATE_CONTAINER }}
 
 concurrency:
   group: terraform-azure-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  # 1. Format, validate and lint the AKS Terraform root.
+  # 1. Format, validate and lint every Terraform root in parallel.
   validate:
     name: Validate & Lint (${{ matrix.root }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        root: [aks-cluster]
+        root: [azure-vm, aks-cluster]
 
     steps:
       - name: Checkout
@@ -100,7 +99,7 @@ jobs:
           # has had its release assets removed upstream, which breaks setup-trivy.
           version: v0.69.3
           scan-type: config
-          scan-ref: aks-cluster
+          scan-ref: .
           severity: HIGH,CRITICAL
           exit-code: "1"
 
@@ -147,15 +146,16 @@ jobs:
             --tenant "${{ secrets.AZURE_TENANT_ID }}"
           az account set --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
 
+      - name: Restore Terraform state
+        uses: actions/cache@v4
+        with:
+          path: ./aks-cluster/terraform.tfstate
+          key: tfstate-plan-${{ github.run_id }}
+          restore-keys: |
+            tfstate-
+
       - name: Terraform Init
-        run: |
-          terraform init -input=false \
-            -backend-config="resource_group_name=${TF_STATE_RESOURCE_GROUP}" \
-            -backend-config="storage_account_name=${TF_STATE_STORAGE_ACCOUNT}" \
-            -backend-config="container_name=${TF_STATE_CONTAINER}" \
-            -backend-config="key=aks-cluster.tfstate" \
-            -backend-config="subscription_id=${ARM_SUBSCRIPTION_ID}" \
-            -backend-config="use_azuread_auth=true"
+        run: terraform init -input=false
 
       - name: Terraform Plan
         run: terraform plan -input=false -out=tfplan
@@ -212,15 +212,16 @@ jobs:
             --tenant "${{ secrets.AZURE_TENANT_ID }}"
           az account set --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
 
+      - name: Restore Terraform state
+        uses: actions/cache@v4
+        with:
+          path: ./aks-cluster/terraform.tfstate
+          key: tfstate-apply-${{ github.run_id }}
+          restore-keys: |
+            tfstate-
+
       - name: Terraform Init
-        run: |
-          terraform init -input=false \
-            -backend-config="resource_group_name=${TF_STATE_RESOURCE_GROUP}" \
-            -backend-config="storage_account_name=${TF_STATE_STORAGE_ACCOUNT}" \
-            -backend-config="container_name=${TF_STATE_CONTAINER}" \
-            -backend-config="key=aks-cluster.tfstate" \
-            -backend-config="subscription_id=${ARM_SUBSCRIPTION_ID}" \
-            -backend-config="use_azuread_auth=true"
+        run: terraform init -input=false
 
       - name: Download Plan Artifact
         uses: actions/download-artifact@v4

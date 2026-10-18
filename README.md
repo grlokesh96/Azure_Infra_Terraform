@@ -17,15 +17,12 @@ azure-vm/
 └── terraform.tfvars.example # Example variable values
 
 aks-cluster/
-├── main.tf        # Resource group
-├── networking.tf  # VNet, subnets, NAT gateway
-├── monitoring.tf  # Log Analytics workspace
-├── aks.tf         # AKS cluster and node pools
-├── acr.tf         # Azure Container Registry and AcrPull role assignment
-├── providers.tf   # AzureRM provider
+├── main.tf        # Resource group, client config data source, AKS cluster
+├── providers.tf   # Terraform and AzureRM provider configuration
 ├── variables.tf   # Input variables
 ├── outputs.tf     # Output values
-└── terraform.tfvars # Variable values
+├── terraform.tfvars.example # Example variable values
+└── Readme.md      # AKS-specific documentation
 ```
 
 ## Prerequisites
@@ -95,7 +92,7 @@ aks-cluster/
 
 ## AKS cluster
 
-The `aks-cluster/` folder provisions an AKS cluster with a system and user node pool, Azure CNI Overlay networking with a NAT gateway for egress, a Log Analytics workspace for Container Insights, and an Azure Container Registry with the `AcrPull` role assigned to the kubelet identity.
+The `aks-cluster/` folder provisions an AKS cluster with a single system node pool (`Standard_D2s_v3`, 1–2 nodes), a system-assigned managed identity, Azure RBAC integration with local accounts disabled, API server access restricted to trusted IP ranges (`authorized_ip_ranges`), and Azure network policy enforcement.
 
 ```bash
 cd Azure_Infra_Terraform/aks-cluster

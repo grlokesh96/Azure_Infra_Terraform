@@ -38,6 +38,15 @@ variable "node_count" {
     error_message = "Node count must be 1 or 2."
   }
 }
+variable "authorized_ip_ranges" {
+  description = "CIDR ranges allowed to reach the AKS API server (replace the placeholder with your trusted IP/CIDR)"
+  type        = list(string)
+  default     = ["203.0.113.10/32"]
+  validation {
+    condition     = length(var.authorized_ip_ranges) > 0
+    error_message = "At least one authorized IP range must be specified to restrict API server access."
+  }
+}
 variable "tags" {
   type = map(string)
   default = {
