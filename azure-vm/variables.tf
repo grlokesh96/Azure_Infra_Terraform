@@ -27,9 +27,22 @@ variable "admin_username" {
   default     = "azureadmin"
 }
 
-variable "admin_ssh_public_key" {
-  description = "SSH public key authorized for the Linux administrator account"
+variable "admin_password" {
+  description = "Password for the Linux administrator account"
   type        = string
+  sensitive   = true
+
+  validation {
+    condition = (
+      length(var.admin_password) >= 12 &&
+      length(var.admin_password) <= 72 &&
+      can(regex("[A-Z]", var.admin_password)) &&
+      can(regex("[a-z]", var.admin_password)) &&
+      can(regex("[0-9]", var.admin_password)) &&
+      can(regex("[^A-Za-z0-9]", var.admin_password))
+    )
+    error_message = "admin_password must be 12-72 characters and include upper case, lower case, numeric and special characters."
+  }
 }
 
 variable "allowed_ssh_cidr" {

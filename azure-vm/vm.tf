@@ -7,12 +7,9 @@ resource "azurerm_linux_virtual_machine" "vm" {
   size = "Standard_D2s_v3"
 
   admin_username                  = var.admin_username
-  disable_password_authentication = true
-
-  admin_ssh_key {
-    username   = var.admin_username
-    public_key = var.admin_ssh_public_key
-  }
+  admin_password                  = var.admin_password
+  # trivy:ignore:AZU-0039 - password authentication is intentional for this VM (see README).
+  disable_password_authentication = false
 
   network_interface_ids = [
     azurerm_network_interface.vm.id

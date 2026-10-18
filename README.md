@@ -30,7 +30,7 @@ aks-cluster/
 - [Terraform](https://developer.hashicorp.com/terraform/downloads) >= 1.9.0
 - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) (optional, depending on auth)
 - An active Azure subscription
-- An SSH key pair for the VM administrator account
+- A strong password for the VM administrator account
 
 ### Required Azure permissions
 
@@ -73,7 +73,7 @@ The identity running Terraform (locally, or the CI service principal) must be au
    Edit `terraform.tfvars` and provide:
    - `subscription_id` - Your Azure subscription ID
    - `admin_username`  - Linux administrator username
-   - `admin_ssh_public_key` - SSH public key for the administrator account (e.g. contents of `~/.ssh/id_ed25519.pub`)
+   - `admin_password` - Password for the administrator account (12-72 chars, mixed case, digit and special character)
    - `allowed_ssh_cidr` - Your public IP/CIDR for SSH access (e.g., `1.2.3.4/32`)
 
 3. Initialize Terraform:
@@ -108,7 +108,7 @@ The identity running Terraform (locally, or the CI service principal) must be au
 
 ## Notes
 
-- SSH access is restricted to the CIDR specified in `allowed_ssh_cidr`; password authentication is disabled and only the configured `admin_ssh_public_key` is accepted.
+- SSH access is restricted to the CIDR specified in `allowed_ssh_cidr`; authentication is by the configured `admin_password` (key-based authentication is not used).
 - The VM uses a system-assigned managed identity, encryption at host, secure boot, vTPM, and platform-managed patching.
 - Public IP is static with a Standard SKU.
 - State is stored locally by default; consider using remote backend for production use.
