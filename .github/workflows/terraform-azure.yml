@@ -13,34 +13,26 @@ on:
     paths:
       - "azure-vm/**"
       - "aks-cluster/**"
+      - ".github/workflows/terraform-azure.yml"
 
   workflow_dispatch:
 
 permissions:
   contents: read
-
-env:
-permissions:
-  contents: read
   id-token: write
-
-steps:
-  - name: Checkout
-    uses: actions/checkout@v4
-
-  - name: Azure Login using OIDC
-    uses: azure/login@v2
-    with:
-      client-id: ${{ vars.ARM_CLIENT_ID }}
-      tenant-id: ${{ vars.ARM_TENANT_ID }}
-      subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
-
-  - name: Verify Azure authentication
-    run: az account show
 
 concurrency:
   group: terraform-azure-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
+
+env:
+  TF_VERSION: "1.9.8"
+  TF_IN_AUTOMATION: "true"
+  TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.terraform.d/plugin-cache
+  ARM_USE_OIDC: "true"
+  ARM_CLIENT_ID: ${{ vars.ARM_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ vars.ARM_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ vars.ARM_SUBSCRIPTION_ID }}
 
 jobs:
   # 1. Format, validate and lint every Terraform root in parallel.
@@ -61,6 +53,9 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
+      - name: Create Terraform plugin cache
+        run: mkdir -p "$TF_PLUGIN_CACHE_DIR"
+
       - name: Cache Terraform providers
         uses: actions/cache@v4
         with:
@@ -70,7 +65,7 @@ jobs:
 
       - name: Terraform Format Check
         working-directory: ${{ matrix.root }}
-        run: terraform fmt -check
+        run: terraform fmt -check -recursive
 
       - name: Terraform Init
         working-directory: ${{ matrix.root }}
@@ -89,9 +84,9 @@ jobs:
         working-directory: ${{ matrix.root }}
         run: |
           tflint --init
-          tflint --recursive
+          tflint
 
-  # 2. Static security scanning (Trivy IaC + Gitleaks) in one job.
+  # 2. Static security scanning (Trivy IaC + Gitleaks).
   security:
     name: Security Scan
     runs-on: ubuntu-latest
@@ -105,8 +100,6 @@ jobs:
       - name: Trivy IaC Scan
         uses: aquasecurity/trivy-action@v0.33.1
         with:
-          # Pin to a released Trivy version: trivy-action's default (v0.65.0)
-          # has had its release assets removed upstream, which breaks setup-trivy.
           version: v0.69.3
           scan-type: config
           scan-ref: .
@@ -122,9 +115,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # 3. Plan on trusted deployment events only.
+  # 3. Plan trusted deployment events only. This job plans AKS only.
   plan:
-    name: Terraform Plan
+    name: Terraform Plan (AKS)
     needs: [validate, security]
     if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
@@ -141,6 +134,9 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
+      - name: Create Terraform plugin cache
+        run: mkdir -p "$TF_PLUGIN_CACHE_DIR"
+
       - name: Cache Terraform providers
         uses: actions/cache@v4
         with:
@@ -148,21 +144,12 @@ jobs:
           key: tf-providers-${{ runner.os }}-${{ hashFiles('**/.terraform.lock.hcl') }}
           restore-keys: tf-providers-${{ runner.os }}-
 
-      - name: Azure Login
-        run: |
-          az login --service-principal \
-            --username "${{ secrets.AZURE_CLIENT_ID }}" \
-            --password "${{ secrets.AZURE_CLIENT_SECRET }}" \
-            --tenant "${{ secrets.AZURE_TENANT_ID }}"
-          az account set --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
-
-      - name: Restore Terraform state
-        uses: actions/cache@v4
+      - name: Azure Login using OIDC
+        uses: azure/login@v2
         with:
-          path: ./aks-cluster/terraform.tfstate
-          key: tfstate-plan-${{ github.run_id }}
-          restore-keys: |
-            tfstate-
+          client-id: ${{ vars.ARM_CLIENT_ID }}
+          tenant-id: ${{ vars.ARM_TENANT_ID }}
+          subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
 
       - name: Terraform Init
         run: terraform init -input=false
@@ -186,9 +173,9 @@ jobs:
           if-no-files-found: error
           retention-days: 5
 
-  # 4. Apply the saved plan behind the production environment gate.
+  # 4. Apply saved plan after approval through the production environment.
   apply:
-    name: Terraform Apply
+    name: Terraform Apply (AKS)
     needs: plan
     if: ${{ needs.plan.result == 'success' }}
     runs-on: ubuntu-latest
@@ -207,6 +194,9 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
+      - name: Create Terraform plugin cache
+        run: mkdir -p "$TF_PLUGIN_CACHE_DIR"
+
       - name: Cache Terraform providers
         uses: actions/cache@v4
         with:
@@ -214,21 +204,12 @@ jobs:
           key: tf-providers-${{ runner.os }}-${{ hashFiles('**/.terraform.lock.hcl') }}
           restore-keys: tf-providers-${{ runner.os }}-
 
-      - name: Azure Login
-        run: |
-          az login --service-principal \
-            --username "${{ secrets.AZURE_CLIENT_ID }}" \
-            --password "${{ secrets.AZURE_CLIENT_SECRET }}" \
-            --tenant "${{ secrets.AZURE_TENANT_ID }}"
-          az account set --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
-
-      - name: Restore Terraform state
-        uses: actions/cache@v4
+      - name: Azure Login using OIDC
+        uses: azure/login@v2
         with:
-          path: ./aks-cluster/terraform.tfstate
-          key: tfstate-apply-${{ github.run_id }}
-          restore-keys: |
-            tfstate-
+          client-id: ${{ vars.ARM_CLIENT_ID }}
+          tenant-id: ${{ vars.ARM_TENANT_ID }}
+          subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
 
       - name: Terraform Init
         run: terraform init -input=false
@@ -237,7 +218,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: terraform-plan
-          path: aks-cluster
+          path: ./aks-cluster
 
       - name: Terraform Apply
         run: terraform apply -input=false -auto-approve tfplan
