@@ -32,6 +32,29 @@ aks-cluster/
 - An active Azure subscription
 - An SSH key pair for the VM administrator account
 
+### Required Azure permissions
+
+The identity running Terraform (locally, or the CI service principal) must be authorized in the target subscription. Otherwise `terraform apply` fails with `AuthorizationFailed` (for example, `Microsoft.Resources/subscriptions/resourceGroups/read`).
+
+- Grant the identity the **Contributor** role at the subscription scope:
+
+  ```bash
+  az role assignment create \
+    --assignee <service-principal-object-id> \
+    --role "Contributor" \
+    --scope "/subscriptions/<subscription-id>"
+  ```
+
+- The `azurerm` provider is configured with `resource_provider_registrations = "none"`, so the providers used by this configuration must be registered once in the subscription:
+
+  ```bash
+  for ns in Microsoft.ContainerService Microsoft.Network Microsoft.Compute Microsoft.ManagedIdentity; do
+    az provider register --namespace "$ns"
+  done
+  ```
+
+- Confirm the subscription configured here / in `AZURE_SUBSCRIPTION_ID` is the one where the role assignment was created.
+
 ## Usage
 
 1. Clone the repository:
