@@ -1,61 +1,35 @@
-variable "subscription_id" {
-  description = "Azure subscription ID"
-  type        = string
-}
-
 variable "location" {
-  description = "Azure region"
   type        = string
-  default     = "East US"
+  default     = "east us"
+  description = "Azure region for the VM resources"
 }
 
-variable "environment" {
-  description = "Environment name"
+variable "resource_group_name" {
   type        = string
-  default     = "prod"
+  default     = "rg-vm-platform"
+  description = "Name of the Resource Group"
 }
 
-variable "project_name" {
-  description = "Project name"
+variable "vm_name" {
   type        = string
-  default     = "platform"
+  default     = "vm-app-01"
+  description = "Name of the Linux Virtual Machine"
+}
+
+variable "vm_size" {
+  type        = string
+  default     = "Standard_D2s_v3"
+  description = "Allowed VM SKU size"
 }
 
 variable "admin_username" {
-  description = "Linux administrator username"
   type        = string
-  default     = "azureadmin"
-}
-
-variable "admin_password" {
-  description = "Password for the Linux administrator account"
-  type        = string
-  sensitive   = true
-
-  validation {
-    condition = (
-      length(var.admin_password) >= 12 &&
-      length(var.admin_password) <= 72 &&
-      can(regex("[A-Z]", var.admin_password)) &&
-      can(regex("[a-z]", var.admin_password)) &&
-      can(regex("[0-9]", var.admin_password)) &&
-      can(regex("[^A-Za-z0-9]", var.admin_password))
-    )
-    error_message = "admin_password must be 12-72 characters and include upper case, lower case, numeric and special characters."
-  }
+  default     = "azureuser"
+  description = "Administrator username for the VM"
 }
 
 variable "allowed_ssh_cidr" {
-  description = "Specific CIDR allowed to reach SSH"
   type        = string
-
-  validation {
-    condition = can(cidrhost(var.allowed_ssh_cidr, 0)) && !contains([
-      "0.0.0.0/0",
-      "::/0",
-      "*",
-      "Internet"
-    ], var.allowed_ssh_cidr)
-    error_message = "allowed_ssh_cidr must be a specific CIDR and cannot allow access from the entire internet."
-  }
+  default     = "0.0.0.0/0" # Replace with your workstation IP (e.g., "203.0.113.5/32") in production
+  description = "CIDR block allowed to SSH into the VM"
 }
