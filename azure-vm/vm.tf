@@ -1,27 +1,34 @@
+# Generates a secure 4096-bit RSA SSH key pair
+resource "tls_private_key" "ssh_key" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
 
 resource "azurerm_linux_virtual_machine" "vm" {
-  name                = "vm-${local.name_prefix}"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
-
-  size = "Standard_D2s_v3"
-
-  admin_username = var.admin_username
-  admin_password = var.admin_password
-  # trivy:ignore:AZU-0039 - password authentication is intentional for this VM (see README).
-  disable_password_authentication = false
+  name                            = var.vm_name
+  resource_group_name             = azurerm_resource_group.rg.name
+  location                        = azurerm_resource_group.rg.location
+  size                            = var.vm_size
+  admin_username                  = var.admin_username
+  disable_password_authentication = true
 
   network_interface_ids = [
-    azurerm_network_interface.vm.id
+    azurerm_network_interface.nic.id,
   ]
 
+  admin_ssh_key {
+    username   = var.admin_username
+    public_key = tls_private_key.ssh_key.public_key_openssh
+  }
+
   os_disk {
-    name                 = "osdisk-${local.name_prefix}"
+    name                 = "osdisk-${var.vm_name}"
     caching              = "ReadWrite"
     storage_account_type = "Premium_LRS"
     disk_size_gb         = 64
   }
 
+  # Ubuntu 24.04 LTS Gen2 Image
   source_image_reference {
     publisher = "Canonical"
     offer     = "ubuntu-24_04-lts"
@@ -29,22 +36,7 @@ resource "azurerm_linux_virtual_machine" "vm" {
     version   = "latest"
   }
 
-  encryption_at_host_enabled = true
-
-  secure_boot_enabled = true
-  vtpm_enabled        = true
-
-  patch_mode     = "AutomaticByPlatform"
-  reboot_setting = "IfRequired"
-
-  # Keep the Azure VM Agent enabled for platform management.
-  provision_vm_agent = true
-
-  boot_diagnostics {}
-
   identity {
     type = "SystemAssigned"
   }
-
-  tags = local.tags
 }
