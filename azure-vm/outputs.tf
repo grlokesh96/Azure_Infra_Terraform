@@ -1,29 +1,15 @@
-output "resource_group_name" {
-  description = "Resource group name"
-  value       = azurerm_resource_group.main.name
+output "vm_public_ip" {
+  value       = azurerm_public_ip.pip.ip_address
+  description = "Public IP address of the Virtual Machine"
 }
 
-output "vm_name" {
-  description = "Virtual machine name"
-  value       = azurerm_linux_virtual_machine.vm.name
+output "ssh_private_key" {
+  value       = tls_private_key.ssh_key.private_key_pem
+  description = "Private SSH key to connect to the VM"
+  sensitive   = true
 }
 
-output "vm_size" {
-  description = "Virtual machine size"
-  value       = azurerm_linux_virtual_machine.vm.size
-}
-
-output "private_ip_address" {
-  description = "VM private IP"
-  value       = azurerm_network_interface.vm.private_ip_address
-}
-
-output "public_ip_address" {
-  description = "VM public IP"
-  value       = azurerm_public_ip.vm.ip_address
-}
-
-output "vm_identity_principal_id" {
-  description = "System assigned managed identity principal ID"
-  value       = azurerm_linux_virtual_machine.vm.identity[0].principal_id
+output "ssh_connection_command" {
+  value       = "ssh -i id_rsa ${var.admin_username}@${azurerm_public_ip.pip.ip_address}"
+  description = "Command to connect to the VM once key is extracted"
 }
